@@ -1,6 +1,11 @@
 package com.ph41626.pma101_recipesharingapplication.Fragment;
 
 import static android.app.Activity.RESULT_OK;
+import static com.ph41626.pma101_recipesharingapplication.Activity.MainActivity.REALTIME_INGREDIENTS;
+import static com.ph41626.pma101_recipesharingapplication.Activity.MainActivity.REALTIME_INSTRUCTIONS;
+import static com.ph41626.pma101_recipesharingapplication.Activity.MainActivity.REALTIME_MEDIAS;
+import static com.ph41626.pma101_recipesharingapplication.Activity.MainActivity.REALTIME_RECIPES;
+import static com.ph41626.pma101_recipesharingapplication.Activity.MainActivity.STORAGE_MEDIAS;
 import static com.ph41626.pma101_recipesharingapplication.Services.Services.CreateNewIngredient;
 import static com.ph41626.pma101_recipesharingapplication.Services.Services.CreateNewInstruction;
 import static com.ph41626.pma101_recipesharingapplication.Services.Services.RandomID;
@@ -17,7 +22,6 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
@@ -43,10 +47,8 @@ import android.widget.Toast;
 import android.widget.VideoView;
 
 import com.bumptech.glide.Glide;
-import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
-import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.storage.FirebaseStorage;
@@ -62,6 +64,8 @@ import com.ph41626.pma101_recipesharingapplication.R;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A simple {@link Fragment} subclass.
@@ -120,22 +124,29 @@ public class CreateRecipeFragment extends Fragment {
     private TextView tv_cook_time,tv_serves;
     private EditText edt_name;
     private LinearLayout btn_choose_media,btn_play,btn_cook_time,btn_serves;
+    private RecyclerView rcv_ingredient,rcv_instruction;
+
     private ArrayList<Ingredient> ingredientList;
     private ArrayList<Instruction> instructionList;
     public ArrayList<Media> mediaList;
-    private RecyclerView rcv_ingredient,rcv_instruction;
+
     private RecyclerViewIngredientAdapter ingredient_adapter;
     private RecyclerViewInstructionAdapter instruction_adapter;
 
+    private Recipe newRecipe = new Recipe();
     private Instruction current_instruction;
+    private ProgressDialog progressDialog;
+
+
     private int current_instruction_pos = -1;
     private boolean isThumbnailRecipeChosen = false;
-    private Recipe newRecipe = new Recipe();
+
     private StorageReference storageReference;
-    private DatabaseReference databaseReferenceMedias;
-    private DatabaseReference databaseReferenceIngredients;
-    private DatabaseReference databaseReferenceInstructions;
-    private ProgressDialog progressDialog;
+    private DatabaseReference
+            databaseReferenceMedias,
+            databaseReferenceIngredients,
+            databaseReferenceInstructions,
+            databaseReferenceRecipes;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -146,11 +157,27 @@ public class CreateRecipeFragment extends Fragment {
         newRecipe.setId(RandomID());
         SetupButtonListeners();
         RecyclerManager();
-        RecipeManager();
 
         return view;
     }
+    private void ResetData() {
+        mediaList.clear();
+        ingredientList.clear();
+        ingredientList.add(CreateNewIngredient());
+        ingredient_adapter.UpdateData(true,ingredientList,0);
+        instructionList.clear();
+        instructionList.add(CreateNewInstruction());
+        instruction_adapter.UpdateData(true,instructionList,0);
 
+        tv_serves.setText("0");
+        tv_cook_time.setText("0 min");
+        edt_name.setText("");
+        img_thumbnail_recipe.setImageResource(R.color.white_1C1);
+        newRecipe = new Recipe();
+        current_instruction = null;
+        current_instruction_pos = -1;
+        isThumbnailRecipeChosen = false;
+    }
     private void SetupButtonListeners() {
         btn_play.setVisibility(View.GONE);
         btn_play.setOnClickListener(new View.OnClickListener() {
@@ -188,10 +215,14 @@ public class CreateRecipeFragment extends Fragment {
             public void onClick(View v) {
                 if (view.hasFocus()) view.clearFocus();
                 String name = edt_name.getText().toString().trim();
-
+                Date newDate = new Date();
                 if (ValidateRecipe(name)) {
-
-
+                    newRecipe.setName(name);
+                    newRecipe.setCreationDate(newDate);
+                    newRecipe.setLastUpdateDate(newDate);
+                    newRecipe.setTotalReviews(0);
+                    newRecipe.setAverageRating(0);
+                    //newRecipe.setUserId();
                     progressDialog.setMessage("Please wait...");
                     progressDialog.setCancelable(false);
                     progressDialog.show();
@@ -211,8 +242,25 @@ public class CreateRecipeFragment extends Fragment {
                 ShowInputDialog(false,"Enter Cook Time", InputType.TYPE_CLASS_NUMBER);
             }
         });
+        btn_add_ingredient.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (view.hasFocus()) view.clearFocus();
+                ingredientList.add(CreateNewIngredient());
+                ingredient_adapter.UpdateData(true, ingredientList, ingredientList.size());
+            }
+        });
+        btn_add_instruction.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (view.hasFocus()) view.clearFocus();
+                Instruction newInstruction = CreateNewInstruction();
+                newInstruction.setRecipeId(newRecipe.getId());
+                instructionList.add(newInstruction);
+                instruction_adapter.UpdateData(true, instructionList, instructionList.size());
+            }
+        });
     }
-
 //    private void DeleteFile() {
 //        storageReference.child("1715517066797.jpg").delete().addOnSuccessListener(new OnSuccessListener<Void>() {
 //            @Override
@@ -225,9 +273,11 @@ public class CreateRecipeFragment extends Fragment {
         ArrayList<UploadTask> uploadTaskMedias = new ArrayList<>();
         ArrayList<Task<Void>> uploadTaskIngredients = new ArrayList<>();
         ArrayList<Task<Void>> uploadTaskInstructions = new ArrayList<>();
+        Task<Void> uploadRecipe = databaseReferenceRecipes.child(newRecipe.getId()).setValue(newRecipe);
+
         for (Media media:mediaList) {
             Uri uri = Uri.parse(media.getUrl());
-            String fileName = System.currentTimeMillis() + "." + getFileExtension(uri);
+            String fileName = System.currentTimeMillis() + "." + GetFileExtension(uri);
             media.setName(fileName);
             StorageReference storageRef = storageReference.child(fileName);
             uploadTaskMedias.add((UploadTask) storageRef.putFile(uri)
@@ -244,71 +294,94 @@ public class CreateRecipeFragment extends Fragment {
                         Toast.makeText(getContext(), "Upload failed for " + media.getName() + ": " + exception.getMessage(), Toast.LENGTH_SHORT).show();
                     }));
         }
-
         for (Ingredient ingredient:ingredientList) {
             ingredient.setId(RandomID());
             DatabaseReference databaseReferenceRef = databaseReferenceIngredients.child(ingredient.getId());
             uploadTaskIngredients.add(databaseReferenceRef.setValue(ingredient));
         }
+        for (Instruction instruction:instructionList) {
+            instruction.setId(RandomID());
+            DatabaseReference databaseReferenceRef = databaseReferenceInstructions.child(instruction.getId());
+            uploadTaskInstructions.add(databaseReferenceRef.setValue(instruction));
+        }
+//        Tasks.whenAll(uploadTaskMedias).addOnCompleteListener(task -> {
+//            if (task.isSuccessful()) {
 
-        Tasks.whenAll(uploadTaskMedias).addOnCompleteListener(task -> {
-            if (task.isSuccessful()) {
-                Toast.makeText(getContext(), "Successful!", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(getContext(), "Failure!", Toast.LENGTH_SHORT).show();
-            }
+//            } else {
+//                Toast.makeText(getContext(), "Failure!", Toast.LENGTH_SHORT).show();
+//            }
+//        });
+        ArrayList<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (UploadTask uploadTask : uploadTaskMedias) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            uploadTask.addOnSuccessListener(taskSnapshot -> future.complete(null))
+                    .addOnFailureListener(e -> future.completeExceptionally(e));
+            futures.add(future);
+        }
+        for (Task<Void> task : uploadTaskIngredients) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            task.addOnSuccessListener(aVoid -> future.complete(null))
+                    .addOnFailureListener(e -> future.completeExceptionally(e));
+            futures.add(future);
+        }
+        for (Task<Void> task : uploadTaskInstructions) {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            task.addOnSuccessListener(aVoid -> future.complete(null))
+                    .addOnFailureListener(e -> future.completeExceptionally(e));
+            futures.add(future);
+        }
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        uploadRecipe.addOnSuccessListener(aVoid -> future.complete(null))
+                .addOnFailureListener(e -> future.completeExceptionally(e));
+        futures.add(future);
+
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+        allOf.thenRun(() -> {
+            //Toast.makeText(getContext(), "All tasks completed.", Toast.LENGTH_SHORT).show();
+            ResetData();
             progressDialog.dismiss();
-        });
-
-        Tasks.whenAll(uploadTaskIngredients).addOnCompleteListener(new OnCompleteListener<Void>() {
-            @Override
-            public void onComplete(@NonNull Task<Void> task) {
-                if (task.isSuccessful()) {
-                    Toast.makeText(getContext(), "Successful A!", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(getContext(), "Failure!", Toast.LENGTH_SHORT).show();
-                }
-            }
+        }).exceptionally(e -> {
+            e.printStackTrace();
+            return null;
         });
     }
-    private String getFileExtension(Uri uri){
+    private String GetFileExtension(Uri uri){
         ContentResolver contentResolver = getActivity().getContentResolver();
         MimeTypeMap mine = MimeTypeMap.getSingleton();
         return uri != null ? mine.getExtensionFromMimeType(contentResolver.getType(uri)):null;
     }
     private boolean ValidateRecipe(String name) {
-        if (!validateMedia()) return false;
-        if (!validateIngredientsAndInstructions()) return false;
-        if (!validateName(name)) return false;
-        if (!validateIngredientsList()) return false;
-        if (!validateInstructionsList()) return false;
+        if (!ValidateMedia()) return false;
+        if (!ValidateIngredientsAndInstructions()) return false;
+        if (!ValidateName(name)) return false;
+        if (!ValidateIngredientsList()) return false;
+        if (!ValidateInstructionsList()) return false;
         return true;
     }
-    private boolean validateMedia() {
+    private boolean ValidateMedia() {
         if (newRecipe.getMediaId() == null || newRecipe.getMediaId().trim().isEmpty()) {
             Toast.makeText(getContext(), "Please select an image or video for the recipe thumbnail", Toast.LENGTH_SHORT).show();
             return false;
         }
         return true;
     }
-
-    private boolean validateIngredientsAndInstructions() {
+    private boolean ValidateIngredientsAndInstructions() {
         if (instructionList == null || instructionList.isEmpty()
                 || ingredientList == null || ingredientList.isEmpty()) {
-            showWarningDialog();
+            ShowDialogWarning();
             return false;
         }
         return true;
     }
-
-    private boolean validateName(String name) {
+    private boolean ValidateName(String name) {
         if (name.isEmpty()) {
             edt_name.setError("Name cannot be empty!");
             return false;
         }
         return true;
     }
-    private boolean validateIngredientsList() {
+    private boolean ValidateIngredientsList() {
         for (int i = 0; i < ingredientList.size(); i++) {
             Ingredient ingredient = ingredientList.get(i);
             if (ingredient.getName().trim().isEmpty()) {
@@ -318,8 +391,7 @@ public class CreateRecipeFragment extends Fragment {
         }
         return true;
     }
-
-    private boolean validateInstructionsList() {
+    private boolean ValidateInstructionsList() {
         for (int i = 0; i < instructionList.size(); i++) {
             Instruction instruction = instructionList.get(i);
             if (instruction.getContent().trim().isEmpty()) {
@@ -329,8 +401,7 @@ public class CreateRecipeFragment extends Fragment {
         }
         return true;
     }
-
-    private void showWarningDialog() {
+    private void ShowDialogWarning() {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setTitle("Warning");
         builder.setMessage("Please add at least one ingredient and one step before saving the recipe.");
@@ -455,7 +526,6 @@ public class CreateRecipeFragment extends Fragment {
         intent.setAction(Intent.ACTION_GET_CONTENT);
         startActivityForResult(intent, PICK_MEDIA_REQUEST);
     }
-
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -508,27 +578,6 @@ public class CreateRecipeFragment extends Fragment {
                 Toast.makeText(getContext(), "File type not supported.", Toast.LENGTH_SHORT).show();
             }
         }
-    }
-
-    private void RecipeManager() {
-        btn_add_ingredient.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (view.hasFocus()) view.clearFocus();
-                ingredientList.add(CreateNewIngredient());
-                ingredient_adapter.UpdateData(true, ingredientList, ingredientList.size());
-            }
-        });
-        btn_add_instruction.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (view.hasFocus()) view.clearFocus();
-                Instruction newInstruction = CreateNewInstruction();
-                newInstruction.setRecipeId(newRecipe.getId());
-                instructionList.add(newInstruction);
-                instruction_adapter.UpdateData(true, instructionList, instructionList.size());
-            }
-        });
     }
     private void RecyclerManager() {
         ingredientList.add(CreateNewIngredient());
@@ -617,12 +666,12 @@ public class CreateRecipeFragment extends Fragment {
         }
         return uri.getPath();
     }
-
     private void initUI() {
-        storageReference = FirebaseStorage.getInstance().getReference("STORAGE_MEDIAS");
-        databaseReferenceMedias = FirebaseDatabase.getInstance().getReference("REALTIME_MEDIAS");
-        databaseReferenceIngredients = FirebaseDatabase.getInstance().getReference("REALTIME_INGREDIENTS");
-        databaseReferenceInstructions = FirebaseDatabase.getInstance().getReference("REALTIME_INSTRUCTIONS");
+        storageReference = FirebaseStorage.getInstance().getReference(STORAGE_MEDIAS);
+        databaseReferenceMedias = FirebaseDatabase.getInstance().getReference(REALTIME_MEDIAS);
+        databaseReferenceIngredients = FirebaseDatabase.getInstance().getReference(REALTIME_INGREDIENTS);
+        databaseReferenceInstructions = FirebaseDatabase.getInstance().getReference(REALTIME_INSTRUCTIONS);
+        databaseReferenceRecipes = FirebaseDatabase.getInstance().getReference(REALTIME_RECIPES);
         progressDialog = new ProgressDialog(getContext(),R.style.AppCompatAlertDialogStyle);
         ingredientList = new ArrayList<>();
         instructionList = new ArrayList<>();

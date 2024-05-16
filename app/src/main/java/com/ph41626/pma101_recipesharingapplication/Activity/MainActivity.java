@@ -2,13 +2,22 @@ package com.ph41626.pma101_recipesharingapplication.Activity;
 
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.etebarian.meowbottomnavigation.MeowBottomNavigation;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.ValueEventListener;
 import com.ph41626.pma101_recipesharingapplication.Adapter.ViewPagerBottomNavigationMainAdapter;
+import com.ph41626.pma101_recipesharingapplication.Model.Media;
+import com.ph41626.pma101_recipesharingapplication.Model.Recipe;
 import com.ph41626.pma101_recipesharingapplication.R;
+import com.ph41626.pma101_recipesharingapplication.Services.FirebaseUtils;
+
+import java.util.ArrayList;
 
 import kotlin.Unit;
 import kotlin.jvm.functions.Function1;
@@ -19,11 +28,16 @@ public class MainActivity extends AppCompatActivity {
     private static final int FRAGMENT_CREATE_RECIPE = 2;
     private static final int FRAGMENT_NOTIFICATIONS = 3;
     private static final int FRAGMENT_PROFILE = 4;
-
-
     private int current_fragment = FRAGMENT_HOME;
+
+
+    public static final String STORAGE_MEDIAS = "STORAGE_MEDIAS";
+    public static final String REALTIME_MEDIAS = "REALTIME_MEDIAS";
+    public static final String REALTIME_INGREDIENTS = "REALTIME_INGREDIENTS";
+    public static final String REALTIME_INSTRUCTIONS = "REALTIME_INSTRUCTIONS";
+    public static final String REALTIME_RECIPES = "REALTIME_RECIPES";
+
     private MeowBottomNavigation bottom_navigation_main;
-    private BottomNavigationView bottom_navigation_view_main;
     private ViewPagerBottomNavigationMainAdapter bottom_navigation_main_adapter;
     private ViewPager2 view_pager_main;
     @Override
@@ -33,6 +47,42 @@ public class MainActivity extends AppCompatActivity {
 
         initUI();
         BottomNavigationManager();
+        //GetDataFromFireBase();
+    }
+
+    private void GetDataFromFireBase() {
+        FirebaseUtils firebaseUtils = new FirebaseUtils();
+
+        GetRecipes(firebaseUtils,REALTIME_RECIPES);
+        GetMedias(firebaseUtils,REALTIME_MEDIAS);
+    }
+
+    private void GetMedias(FirebaseUtils firebaseUtils,String path) {
+        firebaseUtils.getDataFromFirebase(path, new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
+    }
+
+    private void GetRecipes(FirebaseUtils firebaseUtils,String path) {
+        firebaseUtils.getDataFromFirebase(path, new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
     }
 
     private void BottomNavigationManager() {

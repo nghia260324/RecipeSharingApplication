@@ -15,6 +15,8 @@ public class Recipe {
     private Date lastUpdateDate;
     private boolean isPublic;
     private boolean isStatus;
+    private int totalReviews;
+    private double averageRating;
     private ArrayList<String> ingredientIds;
     private ArrayList<String> instructionIds;
     private ArrayList<String> commentIds;
@@ -35,6 +37,8 @@ public class Recipe {
         this.lastUpdateDate = null;
         this.isPublic = isPublic;
         this.isStatus = isStatus;
+        this.totalReviews = 0;
+        this.averageRating = 0;
         this.ingredientIds = ingredientIds;
         this.instructionIds = instructionIds;
         this.commentIds = commentIds;
@@ -127,6 +131,22 @@ public class Recipe {
 
     public void setStatus(boolean status) {
         isStatus = status;
+    }
+
+    public int getTotalReviews() {
+        return totalReviews;
+    }
+
+    public void setTotalReviews(int totalReviews) {
+        this.totalReviews = totalReviews;
+    }
+
+    public double getAverageRating() {
+        return averageRating;
+    }
+
+    public void setAverageRating(double averageRating) {
+        this.averageRating = averageRating;
     }
 
     public ArrayList<String> getIngredientIds() {

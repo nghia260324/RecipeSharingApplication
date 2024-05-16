@@ -1,19 +1,21 @@
 package com.ph41626.pma101_recipesharingapplication.Model;
 
-public class Rating {
+public class Review {
     private String id;
     private String recipeId;
     private String userId;
-    private float ratingValue;
+    private int ratingValue;
+    private String content;
 
-    public Rating() {
+    public Review() {
     }
 
-    public Rating(String id, String recipeId, String userId, float ratingValue) {
+    public Review(String id, String recipeId, String userId, int ratingValue, String content) {
         this.id = id;
         this.recipeId = recipeId;
         this.userId = userId;
         this.ratingValue = ratingValue;
+        this.content = content;
     }
 
     public String getId() {
@@ -40,11 +42,19 @@ public class Rating {
         this.userId = userId;
     }
 
-    public float getRatingValue() {
+    public int getRatingValue() {
         return ratingValue;
     }
 
-    public void setRatingValue(float ratingValue) {
+    public void setRatingValue(int ratingValue) {
         this.ratingValue = ratingValue;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
     }
 }
